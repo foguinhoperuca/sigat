@@ -3,21 +3,15 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Chamado extends CI_Controller {
-  
-  
 
-  function __construct() {
-    parent::__construct();
+    function __construct() {
+        parent::__construct();
 
-    $this->load->model("consultas_model"); //carregando o model das consultas 
-    $this->load->model("chamado_model"); //carregando o model chamado
-    $this->load->model("usuario_model"); //carregando o model usuario
-    //$this->load->library("mailer");
-    $this->load->library("Charset_normalizer");
-
-    
-  
-    
+        $this->load->model("consultas_model"); //carregando o model das consultas 
+        $this->load->model("chamado_model"); //carregando o model chamado
+        $this->load->model("usuario_model"); //carregando o model usuario
+        //$this->load->library("mailer");
+        $this->load->library("Charset_normalizer");
   }
 
   public function index($pagina = NULL, $id_chamado = NULL) { //controle dos chamados
@@ -38,7 +32,8 @@ class Chamado extends CI_Controller {
         $dados = $this->chamado_model->buscaChamado($id_chamado); //traz patrimonios, info do chamado e anexos...
         $dados['usuarios'] = $this->usuario_model->buscaUsuarios(); //traz a lista de todos os usuarios
 
-        //var_dump($dados['chamado']->id_ticket_chamado);
+        // var_dump($dados['chamado']->id_ticket_chamado);
+        // var_dump($dados['icone']);
 
         
         $dados['usuario'] = $usuario; //dados do usuário logado
@@ -69,65 +64,56 @@ class Chamado extends CI_Controller {
   }
 
   public function importar_chamado() {
-  
       $dados = array();
+      $data_arr = array();
   
       // campos
-      $dados['id_ticket'] =          $this->input->post("id_ticket");
-      $dados['nome_solicitante'] =    str_replace(array("'","\""),"",$this->input->post("nome_solicitante"));
-      $dados['resumo_solicitacao'] =  str_replace(array("'","\""),"",$this->input->post("resumo_solicitacao"));
-      $dados['telefone'] =            $this->input->post("telefone");
-      $dados['nome_local'] =          $this->input->post("nome_local");
-      $dados['comp_local'] =          str_replace(array("'","\""),"",$this->input->post("comp_local"));
-      $dados['listaEquipamentos'] =   json_decode($this->input->post("listaEquipamentos"));
-      $dados['anexos'] =              json_decode($this->input->post("g_anexos"));
-      $dados['num_ticket'] =          "Ticket#" . $this->input->post("num_ticket");
-      $dados['id_usuario'] =          $_SESSION["id_usuario"];
+      $dados['id_ticket']          = $this->input->post("id_ticket");
+      $dados['nome_solicitante']   = str_replace(array("'","\""),"",$this->input->post("nome_solicitante"));
+      $dados['resumo_solicitacao'] = str_replace(array("'","\""),"",$this->input->post("resumo_solicitacao"));
+      $dados['telefone']           = $this->input->post("telefone");
+      $dados['nome_local']         = $this->input->post("nome_local");
+      $dados['comp_local']         = str_replace(array("'","\""),"",$this->input->post("comp_local"));
+      $dados['listaEquipamentos']  = json_decode($this->input->post("listaEquipamentos"));
+      $dados['anexos']             = json_decode($this->input->post("g_anexos"));
+      $dados['num_ticket']         = "Ticket#" . $this->input->post("num_ticket");
+      $dados['id_usuario']         = $_SESSION["id_usuario"];
 
-      
-      
-    $nome_usuario = $this->usuario_model->buscaUsuario($_SESSION["id_usuario"])->nome_usuario;
+      $nome_usuario = $this->usuario_model->buscaUsuario($_SESSION["id_usuario"])->nome_usuario;
   
-    $novo_chamado = $this->chamado_model->importaChamado($dados);
+      $novo_chamado = $this->chamado_model->importaChamado($dados);
+      echo $novo_chamado["msg"];
 
-    echo $novo_chamado["msg"];
+      if ($this->config->item('SEND_DATA_OTRS')) {
+          $user = $this->config->item('ticketsys_login');
+          $pwd = $this->config->item('ticketsys_pwd');
+          $api_url = $this->config->item('url_ticketsys_api');
+          $url = $api_url."Ticket/" . $dados['id_ticket'] . "?UserLogin=".$user."&Password=".$pwd;
+          $body = $nome_usuario . " criou o chamado #" .$novo_chamado["novo_id"]. " no SIGAT.\n\n" .
+                "ID SIGAT: #".$novo_chamado["novo_id"]." | IMPORTACAO_SIGAT\n" .
+                "Esta mensagem é automática, não responda.";
 
-    $user = $this->config->item('ticketsys_login');
-    $pwd = $this->config->item('ticketsys_pwd');
+          $data_arr = array(
+              "Ticket" => array(
+                  "QueueID" => $this->config->item('queue_id_sigat'), # mover para fila SIGAT (id 43)
+              ),        
+              "Article" => array(
+                  "Subject" => "[SIGAT] Novo Chamado",
+                  "Body" => $body,
+                  "ContentType" => "text/plain; charset=utf8"
+              )
+          );
+          $data = json_encode($data_arr);
 
-    $api_url = $this->config->item('url_ticketsys_api');
-
-    $url = $api_url."Ticket/" . $dados['id_ticket'] . "?UserLogin=".$user."&Password=".$pwd;
-
-    $data_arr = array();
-
-    $body = $nome_usuario . " criou o chamado #" .$novo_chamado["novo_id"]. " no SIGAT.\n\n" .
-    
-    "ID SIGAT: #".$novo_chamado["novo_id"]." | IMPORTACAO_SIGAT\n" .
-    "Esta mensagem é automática, não responda.";
-
-    $data_arr = array(
-      "Ticket" => array(
-          "QueueID" => $this->config->item('queue_id_sigat'), # mover para fila SIGAT (id 43)
-      ),        
-      "Article" => array(
-        "Subject" => "[SIGAT] Novo Chamado",
-        "Body" => $body,
-        "ContentType" => "text/plain; charset=utf8"
-      )
-    );
-
-    $data = json_encode($data_arr);
-
-    $curl = curl_init();
-    curl_setopt($curl, CURLOPT_URL, $url);
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'PATCH');
-    curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
-    curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-    curl_exec($curl);
-    curl_close($curl);
-
+          $curl = curl_init();
+          curl_setopt($curl, CURLOPT_URL, $url);
+          curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+          curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'PATCH');
+          curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
+          curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+          curl_exec($curl);
+          curl_close($curl);
+      }
   }
 
   public function encerrar_chamado() { //encerrar chamado

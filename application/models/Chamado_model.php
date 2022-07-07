@@ -5,140 +5,116 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 date_default_timezone_set('America/Sao_Paulo');
 
 class Chamado_model extends CI_Model {
-
     public function importaChamado($dados) {
         $msg = NULL;
-
         $this_model = new self; //re-instancia a classe Chamado_model para utilizar seus métodos na função 'registrar'
 
-        // ------------ FUNCAO PARA IMPORTAR------------------ 
-
-        function importar($inst,$sql_insert,$p_nome_fila,$p_id_usuario) {
-
+        /*
+         * ------------ FUNCAO PARA IMPORTAR ------------------
+         */
+        function importar($inst, $sql_insert, $p_nome_fila, $p_id_usuario) {
             $id_novo_chamado = FALSE;
 
             $inst->db->trans_start();
-
             $inst->db->query($sql_insert); //registrando o chamado
-            
             $query = $inst->db->query('SELECT id_chamado from chamado order by data_chamado desc LIMIT 1');
             $linha = $query->row_array();
-
             $id_novo_chamado = $linha['id_chamado'];
-            
             $inst->db->trans_complete();
-             
-           
-            
             //$id_novo_chamado = $inst->db->insert_id(); // buscando o ID do chamado recem aberto
 
             $inst->db->query("insert into alteracao_chamado values(NULL," . $id_novo_chamado  . "," . //criando historico de alteracao
-            $p_id_usuario .", ' abriu o chamado na fila <b>" . 
-            $p_nome_fila . "</b>', NOW())"); 
-
-            
+                             $p_id_usuario .", ' abriu o chamado na fila <b>" . 
+                             $p_nome_fila . "</b>', NOW())");
 
             return $id_novo_chamado;
-        
         }
-                       
-        $q_buscaIdLocal = "select id_local from local where nome_local = '". addslashes($dados['nome_local']) . "'";
 
+        $q_buscaIdLocal = "SELECT id_local, pms_id FROM local WHERE nome_local = '". addslashes($dados['nome_local']) . "'";
         $r_id_local = $this->db->query($q_buscaIdLocal);
 
-            if ($r_id_local->num_rows() > 0) { // validando local
+        if ($r_id_local->num_rows() > 0) { // validando local
+            $id_local = $r_id_local->row()->id_local;
+            $pms_id = $r_id_local->row()->pms_id;
+            $complementoM = mb_strtoupper($dados['comp_local'],'UTF-8');
+            $resumoM = mb_strtoupper($dados['resumo_solicitacao'],'UTF-8');
 
-                $id_local = $r_id_local->row()->id_local;
+            //$id_ticket_otrs = $this->db->query("select id_ticket_triagem from triagem where id_triagem = " .$dados['id_triagem'])->row()->id_ticket_triagem;
 
-                $complementoM = mb_strtoupper($dados['comp_local'],'UTF-8');
-                $resumoM = mb_strtoupper($dados['resumo_solicitacao'],'UTF-8');
-
-                //$id_ticket_otrs = $this->db->query("select id_ticket_triagem from triagem where id_triagem = " .$dados['id_triagem'])->row()->id_ticket_triagem;
-
-                $q_insereChamado = 
-                "INSERT INTO `db_sigat`.`chamado` (`id_local_chamado`, `nome_solicitante_chamado`, `telefone_chamado`, 
+            $q_insereChamado = 
+                             "INSERT INTO `db_sigat`.`chamado` (`id_local_chamado`, `nome_solicitante_chamado`, `telefone_chamado`, 
                 `id_usuario_abertura_chamado`, `status_chamado`, `id_fila_chamado`, `data_chamado`, `ticket_chamado`, 
-                `id_ticket_chamado`,`complemento_chamado`, `resumo_chamado`, `data_encerramento_chamado`) values(" . 
-                $id_local . ",'" .
-                $dados['nome_solicitante'] . "','" .
-                $dados['telefone'] . "'," .
-                $dados['id_usuario'] . ", 'ABERTO', 1, NOW(),'" .
-                $dados['num_ticket'] . "'," .
-                $dados['id_ticket'] . ",'" .
-                $complementoM . "','" .
-                $resumoM . "',NULL)";
+                `id_ticket_chamado`,`complemento_chamado`, `resumo_chamado`, `data_encerramento_chamado`, `pms_id`) values(" . 
+                             $id_local . ",'" .
+                             $dados['nome_solicitante'] . "','" .
+                             $dados['telefone'] . "'," .
+                             $dados['id_usuario'] . ", 'ABERTO', 1, NOW(),'" .
+                             $dados['num_ticket'] . "'," .
+                             $dados['id_ticket'] . ",'" .
+                             $complementoM . "','" .
+                             $resumoM . "', NULL, " .
+                             $pms_id . ")"
+                             ;
 
-                if (strlen($resumoM) > 6)
-                    $this->db->query("insert resumo values(NULL,'" . $resumoM . "')"); // cadastrando resumos
-                if (strlen($complementoM) > 6)
-                    $this->db->query("insert complemento values(NULL,'" . $complementoM . "')"); // cadastrando complementos
+            // TODO resumo & complemento will be used as autocomplete in near future. Maybe a SQL View would do the job?
+            if (strlen($resumoM) > 6)
+                $this->db->query("INSERT resumo VALUES (NULL, '" . $resumoM . "')"); // cadastrando resumos
+            if (strlen($complementoM) > 6)
+                $this->db->query("INSERT complemento VALUES (NULL, '" . $complementoM . "')"); // cadastrando complementos
 
-                
-                
-                
+            $nome_fila = $this->db->query("SELECT nome_fila FROM fila WHERE id_fila = 1")->row()->nome_fila;
+            if (!empty($dados['listaEquipamentos'])) {
+                $novo_id = importar($this_model, $q_insereChamado, $nome_fila, $dados['id_usuario']);
 
-                $nome_fila = $this->db->query("select nome_fila from fila where id_fila = 1")->row()->nome_fila;
-                    if (!empty($dados['listaEquipamentos'])) {
+                if($novo_id !== FALSE) {
 
-                        $novo_id = importar($this_model,$q_insereChamado,$nome_fila,$dados['id_usuario']);
-
-                        if( $novo_id !== FALSE) {
-
-                            // ------------ LOG -------------------
-
-                            $log = array(
-                                'acao_evento' => 'INSERIR_CHAMADO',
-                                'desc_evento' => 'ID CHAMADO: ' . $novo_id ,
-                                'id_usuario_evento' => $_SESSION['id_usuario']
-                            );
-                            
-                            $this->db->insert('evento', $log);
-
-                            // -------------- /LOG ----------------
+                    // ------------ LOG -------------------
+                    $log = array(
+                        'acao_evento' => 'INSERIR_CHAMADO',
+                        'desc_evento' => 'ID CHAMADO: ' . $novo_id ,
+                        'id_usuario_evento' => $_SESSION['id_usuario']
+                    );
+                    $this->db->insert('evento', $log);
+                    // -------------- /LOG ----------------
                     
-                            foreach($dados['listaEquipamentos'] as $equip) { //registrando nas tabelas equipamento_chamado e, se necessario, na tabela equipamento
-                                $busca_equip = $this->db->query("select * from equipamento where num_equipamento = '". $equip->Número ."'");
-                                if ($busca_equip->num_rows() == 0) { //equipamento novo
-                                    $this->db->query("insert into equipamento values('". $equip->Número ."','". $equip->Descrição . "',NOW(),NULL,NULL)");
-                                }
-                                $this->db->query("insert into equipamento_chamado values('" . $equip->Número."','ABERTO', NULL, NOW(),". $novo_id .")");
-                            }
-
-                            foreach($dados['anexos'] as $anexo) {
-                                $this->db->query("insert into anexos_otrs(id_chamado_sigat,id_anexo_otrs) values(".$novo_id.",". $anexo->id_arquivo.")");
-            
-                            }
-
-                        //$this->db->query("delete from anexos_otrs where id_chamado_sigat is NULL and id_triagem_sigat = " . $dados['id_triagem']); //deletando anexos descartados
-                        //$this->db->query("update triagem set triado_triagem = 1 where id_triagem = " . $dados['id_triagem']); //marcando triagem como realizada
-                        
-                    
-                        $msg = "";
-                        $msg = "<div id=\"alerta\" class=\"alert alert-success\">";
-                        $msg .= "<small class=\"float-right\">". date('G:i:s') . "</small>";
-                        $msg .= "Importação concluída! Chamado n. "; 
-                        $msg .= $novo_id . "<br /><a href=". base_url('/painel?v=triagem') . ">Voltar para o painel</a>";
-                        $msg .= "</div>"; 
-
-                        return array("novo_id" => $novo_id, "msg" => $msg);
+                    foreach($dados['listaEquipamentos'] as $equip) { //registrando nas tabelas equipamento_chamado e, se necessario, na tabela equipamento
+                        $busca_equip = $this->db->query("select * from equipamento where num_equipamento = '". $equip->Número ."'");
+                        if ($busca_equip->num_rows() == 0) { //equipamento novo
+                            $this->db->query("insert into equipamento values('". $equip->Número ."','". $equip->Descrição . "',NOW(),NULL,NULL)");
+                        }
+                        $this->db->query("insert into equipamento_chamado values('" . $equip->Número."','ABERTO', NULL, NOW(),". $novo_id .")");
                     }
 
-                        
-                        else
-                            die($novo_id);
-
-                        
+                    // TODO usar anexos OTRS somente -
+                    // FIXME como eh feita de => para do anexo_otrs para que ele seja reconhecido no SIGAT
+                    foreach($dados['anexos'] as $anexo) {
+                        $this->db->query("insert into anexos_otrs(id_chamado_sigat,id_anexo_otrs) values(".$novo_id.",". $anexo->id_arquivo.")");
                     }
-                
-            } else {
 
-                $msg .= "<div id=\"alerta\" class=\"alert alert-warning alert-dismissible\">" .
-                "<a href=\"#\" class=\"close\" data-dismiss=\"alert\" aria-label=\"close\">&times;</a>" .
-                "Local inválido!" .
-                "</div>";
+                    // FIXME not used anymore. Still need be here!?
+                    //$this->db->query("delete from anexos_otrs where id_chamado_sigat is NULL and id_triagem_sigat = " . $dados['id_triagem']); //deletando anexos descartados
+                    //$this->db->query("update triagem set triado_triagem = 1 where id_triagem = " . $dados['id_triagem']); //marcando triagem como realizada
 
-                exit($msg);
+                    $msg = "";
+                    $msg = "<div id=\"alerta\" class=\"alert alert-success\">";
+                    $msg .= "<small class=\"float-right\">". date('G:i:s') . "</small>";
+                    $msg .= "Importação concluída! Chamado n. "; 
+                    $msg .= $novo_id . "<br /><a href=". base_url('/painel?v=triagem') . ">Voltar para o painel</a>";
+                    $msg .= "</div>";
+
+                    return array("novo_id" => $novo_id, "msg" => $msg);
+                } else {
+                    die($novo_id);
+                }                        
             }
+        } else {
+            $msg .= "<div id=\"alerta\" class=\"alert alert-warning alert-dismissible\">" .
+                 "<a href=\"#\" class=\"close\" data-dismiss=\"alert\" aria-label=\"close\">&times;</a>" .
+                 "Local inválido!" .
+                 "</div>";
+
+            exit($msg);
+        }
     }
 
     public function alteraChamado($dados) {
@@ -344,6 +320,7 @@ class Chamado_model extends CI_Model {
 
     }
 
+    // FIXME ainda é usado?
     public function buscaTicketTriagem($id_triagem) {
 
         $result = $this->db->query("select ticket_triagem from triagem where id_triagem = " . $id_triagem);
