@@ -79,7 +79,7 @@ class Consultas_model extends CI_Model {
         FROM article_data_mime adm
         INNER JOIN article a ON (adm.article_id = a.id)
         INNER JOIN ticket t ON (a.ticket_id = t.id)
-        WHERE t.queue_id = 37 AND t.ticket_state_id IN(1,4)
+        WHERE t.queue_id = " . $this->config->item('queue_id_suporte_atendimento') . " AND t.ticket_state_id IN(1,4)
         GROUP BY t.tn
         ORDER BY adm.create_time ASC");
 

@@ -10,3 +10,7 @@ application/config/database.php
 sessions/*
 application/libraries/Mailer.php
 application/libraries/Consulta_ldap.php
+*~*
+*#*
+TAGS
+tags

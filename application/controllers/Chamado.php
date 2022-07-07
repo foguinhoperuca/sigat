@@ -108,7 +108,7 @@ class Chamado extends CI_Controller {
 
     $data_arr = array(
       "Ticket" => array(
-        "QueueID" => 43, # mover para fila SIGAT
+          "QueueID" => $this->config->item('queue_id_sigat'), # mover para fila SIGAT (id 43)
       ),        
       "Article" => array(
         "Subject" => "[SIGAT] Novo Chamado",
@@ -229,7 +229,7 @@ class Chamado extends CI_Controller {
 
     $data_arr = array(
       "Ticket" => array(
-        "QueueID" => 5, # mover para fila Nivel0
+        "QueueID" => $this->config->item('queue_id_nivel_0'), # mover para fila Nivel0 (id 5)
       ),        
       "Article" => array(
         "Subject" => "[SIGAT] Devolução",

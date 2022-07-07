@@ -3,56 +3,37 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Triagem extends CI_Controller {
+    function __construct() {
+        parent::__construct();
 
-
-
-  function __construct() {
-    parent::__construct();
-
-    $this->load->model("consultas_model"); //carregando o model das consultas 
-    $this->load->model("chamado_model"); //carregando o model chamado
-    $this->load->model("usuario_model"); //carregando o model usuario
-    $this->load->library("Charset_normalizer");
-
-    
-  }
-
-  public function index($id_ticket = NULL) { //exibe triagem
-    if (isset($_SESSION['id_usuario'])) {
-
-      $usuario = $this->usuario_model->buscaUsuario($_SESSION['id_usuario']);
-
-      if ($usuario->triagem_usuario == 0) {
-
-        header('Location: ' . base_url());
-
-      }
-
-      else {
-
-        $triagem = NULL;
-		
-		    $triagem  = $this->consultas_model->buscaTicket($id_ticket,37); //traz chamado migrado, fila Suporte Atendimento
-		
-		    if (isset($triagem )) { // se o chamado existir
-
-          $this->load->view('templates/cabecalho', $usuario);
-
-          $this->load->view('paginas/triagem', $triagem);
-
-          $this->load->view('templates/rodape');
-			
-		    }
-        else {
-          show_404();
-        }
-		  }
-    } else {
-      header('Location: ' . base_url(),false,403);
+        $this->load->model("consultas_model"); //carregando o model das consultas 
+        $this->load->model("chamado_model"); //carregando o model chamado
+        $this->load->model("usuario_model"); //carregando o model usuario
+        $this->load->library("Charset_normalizer");
     }
-  }
 
+    public function index($id_ticket = NULL) { //exibe triagem
+        if (isset($_SESSION['id_usuario'])) {
+            $usuario = $this->usuario_model->buscaUsuario($_SESSION['id_usuario']);
 
+            if ($usuario->triagem_usuario == 0) {
+                header('Location: ' . base_url());
+            } else {
+                $triagem = NULL;
+                $triagem = $this->consultas_model->buscaTicket($id_ticket, $this->config->item('queue_id_suporte_atendimento')); //traz chamado migrado, fila Suporte Atendimento
+
+                if (isset($triagem )) { // se o chamado existir
+                    $this->load->view('templates/cabecalho', $usuario);
+                    $this->load->view('paginas/triagem', $triagem);
+                    $this->load->view('templates/rodape');
+                } else {
+                    show_404();
+                }
+            }
+        } else {
+            header('Location: ' . base_url(), false, 403);
+        }
+    }
   public function listar_triagem() {
 
     $result_banco = $this->consultas_model->listaTriagem();
