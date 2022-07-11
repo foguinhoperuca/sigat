@@ -85,7 +85,7 @@ class Chamado_model extends CI_Model {
                         $this->db->query("insert into equipamento_chamado values('" . $equip->Número."','ABERTO', NULL, NOW(),". $novo_id .")");
                     }
 
-                    // TODO usar anexos OTRS somente -
+                    // TODO usar anexos OTRS somente
                     // FIXME como eh feita de => para do anexo_otrs para que ele seja reconhecido no SIGAT
                     foreach($dados['anexos'] as $anexo) {
                         $this->db->query("insert into anexos_otrs(id_chamado_sigat,id_anexo_otrs) values(".$novo_id.",". $anexo->id_arquivo.")");
@@ -118,136 +118,109 @@ class Chamado_model extends CI_Model {
     }
 
     public function alteraChamado($dados) {
-
         $msg = NULL;
+        $texto_alteracao = NULL;
 
-        $q_buscaIdLocal = "select id_local from local where nome_local = '". addslashes($dados['nome_local']) . "'";
-
+        $q_buscaIdLocal = "SELECT id_local, pms_id FROM local WHERE nome_local = '". addslashes($dados['nome_local']) . "'";
         $r_id_local = $this->db->query($q_buscaIdLocal);
 
         if ($r_id_local->num_rows() > 0) { // validando local
             $id_local = $r_id_local->row()->id_local;
+            $pms_id = $r_id_local->row()->pms_id;
         } else {
-
-
             $msg .= "<div id=\"alerta\" class=\"alert alert-warning alert-dismissible\">" .
                 "<a href=\"#\" class=\"close\" data-dismiss=\"alert\" aria-label=\"close\">&times;</a>" .
                 "Local inválido!" .
                 "</div>";
 
-            
             exit($msg);
-
         }
         
-        // ------ checando alteracoes no chamado ---------
+        /*
+         * ------ checando alteracoes no chamado ---------
+         */
 
-        
-
-        $texto_alteracao = NULL;
-
-
-        $chamado_original = $this->db->query('select id_usuario_responsavel_chamado, 
-        (select nome_usuario from usuario where id_usuario = id_usuario_responsavel_chamado) as nome_responsavel, 
+        $chamado_original = $this->db->query('SELECT id_usuario_responsavel_chamado, 
+        (SELECT nome_usuario FROM usuario WHERE id_usuario = id_usuario_responsavel_chamado) AS nome_responsavel, 
         nome_solicitante_chamado, telefone_chamado, 
-        id_local_chamado, (select nome_local from local where id_local = id_local_chamado) as nome_local from chamado
-        where id_chamado = ' . $dados['id_chamado'])->row();
+        id_local_chamado, (SELECT nome_local FROM local WHERE id_local = id_local_chamado) AS nome_local FROM chamado
+        WHERE id_chamado = ' . $dados['id_chamado'])->row();
 
         if ($dados['id_responsavel'] != NULL) { //se foi enviado algum id_responsavel...
             $q_alteraChamado = 
-            "update chamado set nome_solicitante_chamado = '" . $dados['nome_solicitante'] . 
-            "', telefone_chamado = " . $dados['telefone'] . ", id_local_chamado = " . $id_local . ", id_usuario_responsavel_chamado = "
-            . $dados['id_responsavel'] . " where id_chamado = " . $dados['id_chamado'];
-
-
+            "UPDATE chamado SET nome_solicitante_chamado = '" . $dados['nome_solicitante'] . 
+            "', telefone_chamado = " . $dados['telefone'] . ", id_local_chamado = " . $id_local . ", pms_id = " . $pms_id . ", id_usuario_responsavel_chamado = "
+            . $dados['id_responsavel'] . " WHERE id_chamado = " . $dados['id_chamado'];
         } else { //se nao...
             $q_alteraChamado = 
-            "update chamado set nome_solicitante_chamado = '" . $dados['nome_solicitante'] . 
-            "', telefone_chamado = " . $dados['telefone'] . ", id_local_chamado = " . $id_local . 
-            " where id_chamado = " . $dados['id_chamado'];
-
-            
+            "UPDATE chamado SET nome_solicitante_chamado = '" . $dados['nome_solicitante'] . 
+            "', telefone_chamado = " . $dados['telefone'] . ", id_local_chamado = " . $id_local . ", pms_id = " . $pms_id . 
+            " WHERE id_chamado = " . $dados['id_chamado'];
         }
 
-        $this->db->query($q_alteraChamado); //executa a alteracao
+        // // FIXME execute it twice?! See #L200
+        // $this->db->query($q_alteraChamado); //executa a alteracao
 
         //removido inserção de interacao
 
+        // TODO alteracao_chamado ficaria mais eficiente sendo logado diretamente no banco e preferencialmente em uma tabela soh (eventos) aos inves de duas (alteracao_chamado e eventos)
         //inserindo na tabela alteracao
-
         if ($chamado_original->id_local_chamado != $id_local) {
-
-            $novo_nome_local = $this->db->query('select nome_local from local where id_local = ' . $id_local)->row()->nome_local;
+            // FIXME otrs_location has impact here!
+            $novo_nome_local = $this->db->query('SELECT nome_local FROM local WHERE id_local = ' . $id_local)->row()->nome_local;
 
             $texto_alteracao .= 'alterou o local de <strong>' . $chamado_original->nome_local . '</strong>';
             $texto_alteracao .= ' para <strong>' . $novo_nome_local . '</strong></p>';
         }
 
         if ($chamado_original->telefone_chamado != $dados['telefone']) {
-
             $texto_alteracao .= 'alterou o telefone de <strong>' . $chamado_original->telefone_chamado . '</strong>';
             $texto_alteracao .= ' para <strong>' . $dados['telefone'] . '</strong></p>';
         }
 
         if ($chamado_original->nome_solicitante_chamado != $dados['nome_solicitante']) {
-
             $texto_alteracao .= 'alterou o solicitante de <strong>' . $chamado_original->nome_solicitante_chamado . '</strong>';
             $texto_alteracao .= ' para <strong>' . $dados['nome_solicitante'] . '</strong></p>';
         }
 
-        if ($dados['id_responsavel'] != NULL) { 
-
+        if ($dados['id_responsavel'] != NULL) {
+            // FIXME somente um if eh necessario
             if ($chamado_original->id_usuario_responsavel_chamado != $dados['id_responsavel']) {
-                $novo_nome_responsavel = $this->db->query('select nome_usuario from usuario where id_usuario = ' . $dados['id_responsavel'])->row()->nome_usuario;
+                $novo_nome_responsavel = $this->db->query('SELECT nome_usuario FROM usuario WHERE id_usuario = ' . $dados['id_responsavel'])->row()->nome_usuario;
 
                 if ($chamado_original->id_usuario_responsavel_chamado != NULL) { 
                     $texto_alteracao .= 'alterou o responsável de <strong>' . $chamado_original->nome_responsavel . '</strong>';
                     $texto_alteracao .= ' para <strong>' . $novo_nome_responsavel . '</strong>';
-
-                }
-
-                else { //se a alteracao do responsavel for de NULL para algum valor...
-
+                } else { // se a alteracao do responsavel for de NULL para algum valor...
                     $texto_alteracao .= 'alterou o responsável';
                     $texto_alteracao .= ' para <strong>' . $novo_nome_responsavel . '</strong>';
                 }
-                
-                
             }
-
         }
 
+        // FIXME somente um if eh necessario...
         if($this->db->query($q_alteraChamado)) {
-
             if ($texto_alteracao != NULL) {
-
                 $nova_alteracao = array (
                     'id_alteracao' => NULL,
                     'data_alteracao' => date('Y-m-d H:i:s'),
                     'texto_alteracao' => $texto_alteracao,
                     'id_chamado_alteracao' => $dados['id_chamado'],
                     'id_usuario_alteracao' => $dados['id_usuario'],
-           
-                 ); 
-                 
+                 );
                  $this->db->insert('alteracao_chamado',$nova_alteracao);
 
                  // ------------ LOG -------------------
-
                  $log = array(
                     'acao_evento' => 'ALTERAR_CHAMADO',
                     'desc_evento' => 'ID CHAMADO: ' . $dados['id_chamado'],
                     'id_usuario_evento' => $_SESSION['id_usuario']
                 );
-                
                 $this->db->insert('evento', $log);
-
                 // -------------- /LOG ----------------
-
             }
         //     exit($msg);
-        }  
-            
+        }
     }
 
     public function encerraChamado($dados) {
