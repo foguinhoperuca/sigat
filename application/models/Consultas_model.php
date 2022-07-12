@@ -3,78 +3,104 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Consultas_model extends CI_Model {
+    public function listaChamados($id_fila = NULL, $id_usuario) {
+        /*
+         * removida verificacao do solicitante
+         */
 
-   
-    public function listaChamados($id_fila = NULL,$id_usuario) {
+        $nivel_usuario = $this->db->query('SELECT autorizacao_usuario FROM usuario WHERE id_usuario = ' . $id_usuario)->row()->autorizacao_usuario;
+        $final_segment = "";
 
-        //removida verificacao do solicitante
-
-        $nivel_usuario = $this->db->query('select autorizacao_usuario from usuario where id_usuario = ' . $id_usuario)->row()->autorizacao_usuario;
-
-
-        $q = "SELECT id_chamado, ticket_chamado, id_fila_chamado, nome_solicitante_chamado, data_chamado, prioridade_chamado,
-        (
-       SELECT nome_local
-       FROM local
-       WHERE id_local = id_local_chamado) AS nome_local, 
-               data_chamado, 
-        (
-       SELECT usuario.nome_usuario
-       FROM usuario
-       WHERE usuario.id_usuario = c.id_usuario_responsavel_chamado) AS nome_responsavel, 
-       (
-       SELECT COUNT(*)
-       FROM equipamento_chamado
-       WHERE id_chamado_equipamento = c.id_chamado) AS total_equips,
-       (
-       SELECT COUNT(*)
-       FROM equipamento_chamado
-       WHERE id_chamado_equipamento = c.id_chamado AND status_equipamento_chamado IN('ATENDIDO','ENTREGUE','INSERVIVEL')) AS atend_equips,
-       status_chamado, entrega_chamado,
-       (
-        SELECT data_interacao FROM interacao
-        WHERE id_chamado_interacao = c.id_chamado
-        ORDER BY data_interacao DESC
-        LIMIT 1
-        ) AS data_ultima_interacao
-       FROM chamado c where";
-
-        $q .= ' status_chamado <> \'ENCERRADO\' and';
-
-
-        if ($nivel_usuario <= 2 ) { 
-            $q .= ' (id_usuario_responsavel_chamado = ' . $id_usuario;
-            $q .= " or id_usuario_responsavel_chamado is NULL) and";
+        if ($nivel_usuario <= 2) {
+            $final_segment .= ' (id_usuario_responsavel_chamado = ' . $id_usuario . " OR id_usuario_responsavel_chamado IS NULL) AND";
         }
 
         if ($id_fila > 0) {
-
             if ($id_fila == 7) { // fila de Entrega (virtual)
-                $q .= " id_fila_chamado = 3";
-
-                $q .= " and entrega_chamado = 1";
+                $final_segment .= " id_fila_chamado = 3 AND entrega_chamado = 1";
             } else {
-
-                $q .= " id_fila_chamado = " . $id_fila;
+                $final_segment .= " id_fila_chamado = " . $id_fila;
             }
-            
         } else {
-
-            $q .= " id_fila_chamado > 0 ";
+            $final_segment .= " id_fila_chamado > 0 ";
         }
 
-        //$q .= ' order by data_chamado';
+        // var_dump($final_segment . " LALALA " );
+        
+        // TODO rewrite it!
+        $q = <<<SQL
+           SELECT
+             id_chamado,
+             ticket_chamado,
+             id_fila_chamado, 
+             nome_solicitante_chamado,
+             data_chamado,
+             -- data_chamado, -- 2x ?? (repete!!)
+             prioridade_chamado,
+             -- status_chamado, -- sem uso !?
+             entrega_chamado,
+             -- TODO use otrs instead local
+             -- (
+             --     SELECT
+             --       nome_local
+             --     FROM local
+             --     WHERE
+             --       id_local = id_local_chamado
+             -- ) AS nome_local,
+             (
+                 SELECT
+                   l.name AS "nome_local"
+                 FROM otrs_locations AS l
+                 WHERE
+                   pms_id = l.PMSID
+             ) AS nome_local,
+             (
+                 SELECT
+                   usuario.nome_usuario
+                 FROM usuario
+                 WHERE
+                   usuario.id_usuario = c.id_usuario_responsavel_chamado
+             ) AS nome_responsavel, 
+             (
+                 SELECT
+                   COUNT(*)
+                 FROM equipamento_chamado
+                 WHERE id_chamado_equipamento = c.id_chamado
+             ) AS total_equips,
+             (
+                 SELECT
+                   COUNT(*)
+                 FROM equipamento_chamado
+                 WHERE id_chamado_equipamento = c.id_chamado AND status_equipamento_chamado IN ('ATENDIDO', 'ENTREGUE', 'INSERVIVEL')
+             ) AS atend_equips,
+             (
+                 SELECT
+                   data_interacao
+                 FROM interacao
+                 WHERE
+                   id_chamado_interacao = c.id_chamado
+                 ORDER BY
+                   data_interacao DESC
+                 LIMIT 1
+             ) AS data_ultima_interacao
+           FROM chamado c
+           WHERE
+             status_chamado <> 'ENCERRADO'
+             AND {$final_segment}
+           ;
+        SQL;
 
         return $this->db->query($q)->result();
     }
-	
-	public function listaTriagem() { // lista de chamados da fila Suporte Atendimento do OTRS (queue_id = 37)
-        
 
+    /*
+     * lista de chamados da fila Suporte Atendimento do OTRS (queue_id = 37)
+     */
+	public function listaTriagem() {
         $db_otrs = $this->load->database('otrs', TRUE);
 
+        // FIXME Reweite it - not SQL92 compliant query (GROUP BY with outside columns). Postgresql not working neither Mysql without workarround.
         $db_otrs->query("SET SESSION sql_mode=''");
-        
         $res = $db_otrs->query("SELECT t.id, t.tn, t.create_time, t.title, REPLACE(adm.a_from,'\"','') as a_from
         FROM article_data_mime adm
         INNER JOIN article a ON (adm.article_id = a.id)

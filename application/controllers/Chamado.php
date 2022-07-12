@@ -236,21 +236,17 @@ class Chamado extends CI_Controller {
     curl_close($curl);
   }
 
-  public function listar_chamados_painel($id_fila = NULL) {
+    public function listar_chamados_painel($id_fila = NULL) {
+        $result_banco = $this->consultas_model->listaChamados($id_fila, $_SESSION['id_usuario']);
+        $lista_painel['data'] = array();
 
-    $result_banco = $this->consultas_model->listaChamados($id_fila,$_SESSION['id_usuario']);
-    $lista_painel['data'] = array();
-
-    foreach ($result_banco as $linha) {
+        foreach ($result_banco as $linha) {
+            $nome_local = $linha->nome_local;
+            $nome_local .=  " <span class=\"badge badge-secondary\">";
 		
-	
-		$nome_local = $linha->nome_local;
-		
-		$nome_local .=  " <span class=\"badge badge-secondary\">";
-		
-		switch ($linha->id_fila_chamado) {
+            switch ($linha->id_fila_chamado) {
 			case 1:
-        $fila = $this->consultas_model->listaFila(1);
+                $fila = $this->consultas_model->listaFila(1);
 				$nome_local .= "<i class=\"" . $fila->icone_fila . " title=\"" . $fila->nome_fila ."></i>";
 				break;
 			case 2:
@@ -261,123 +257,102 @@ class Chamado extends CI_Controller {
 				$fila = $this->consultas_model->listaFila(3);
 				$nome_local .= "<i class=\"" . $fila->icone_fila . " title=\"" . $fila->nome_fila ."></i>";
 				break;
-		}
+            }
 		
-		$nome_local .=  "</span>";
-		
+            $nome_local .=  "</span>";
+            $dataInicio = $linha->data_ultima_interacao == NULL ? new DateTime($linha->data_chamado) : new DateTime($linha->data_ultima_interacao);
+            // var_dump($dataInicio);
 
-    $dataInicio = $linha->data_ultima_interacao == NULL ? new DateTime($linha->data_chamado) : new DateTime($linha->data_ultima_interacao);
+            $dataFim = new DateTime("now");
+            $intervalo = date_diff($dataInicio,$dataFim);
+            $tempo_espera_oculto = $intervalo->format("%Y-%M-%D-%H-%M"); // para ordernação do DataTables
+            $tempo_espera_display = ""; // exibição amigável
+            $tempo_espera = 0; // para calculo do tempo de espera
+            $tempo_espera_fmt = $intervalo->format('%y::%m::%d::%h::%i');
+            $array_tempo_espera = explode("::",$tempo_espera_fmt);
 
-    // var_dump($dataInicio);
+            // Exibição do tempo de espera
+            if ($array_tempo_espera[0] >= 1) {
+                $tempo_espera_display .= $array_tempo_espera[0]."a ";
+            }
 
-    $dataFim = new DateTime("now");
+            if ($array_tempo_espera[1] >= 1) {
+                $tempo_espera_display .= $array_tempo_espera[1]."m ";
+            }
 
-    $intervalo = date_diff($dataInicio,$dataFim);
+            if ($array_tempo_espera[2] >= 1) {
+                if($array_tempo_espera[0] == 0)
+                    $tempo_espera_display .= $array_tempo_espera[2]."d ";
+            }
 
-    $tempo_espera_oculto = $intervalo->format("%Y-%M-%D-%H-%M"); // para ordernação do DataTables
+            if ($array_tempo_espera[3] >= 1) {
+                if($array_tempo_espera[1] == 0)
+                    $tempo_espera_display .= $array_tempo_espera[3]."h ";
+
+            }
+
+            if ($array_tempo_espera[4] >= 1) {
+                if($array_tempo_espera[2] == 0)
+                    $tempo_espera_display .= $array_tempo_espera[4]."m";
+            }
+
+            // Calculo do tempo de espera em horas
+            if ($array_tempo_espera[0] >= 1) {
+                $tempo_espera += $array_tempo_espera[0] * 12 * 30 * 24; //ano
+            }
+
+            if ($array_tempo_espera[1] >= 1) {
+                $tempo_espera += $array_tempo_espera[1] * 30 * 24; //mes
+            }
+
+            if ($array_tempo_espera[2] >= 1) {
+                $tempo_espera += $array_tempo_espera[2] * 24;
+            }
+
+            $tempo_espera += $array_tempo_espera[3];
+            $tempo_medio = $this->consultas_model->conf()->tempo_medio_atendimento;
+            $tempo_max = $this->consultas_model->conf()->tempo_max_atendimento;
+            $aviso_tempo = "";
     
-    $tempo_espera_display = ""; // exibição amigável
-    
-    $tempo_espera = 0; // para calculo do tempo de espera
+            if($tempo_espera >= $tempo_medio && $tempo_espera < $tempo_max) {
+                $aviso_tempo  = " <span class=\"text-warning\"><i class=\"fas fa-clock\"></i></span>";
+            }
 
-    $tempo_espera_fmt = $intervalo->format('%y::%m::%d::%h::%i');
-    $array_tempo_espera = explode("::",$tempo_espera_fmt);
+            if($tempo_espera > $tempo_max) {
+                $aviso_tempo = " <span class=\"text-danger\"><i class=\"fas fa-clock\"></i></span>";
+            }
 
-
-    // Exibição do tempo de espera
-
-    if ($array_tempo_espera[0] >= 1) {
-      $tempo_espera_display .= $array_tempo_espera[0]."a ";
-    }
-    if ($array_tempo_espera[1] >= 1) {
-      $tempo_espera_display .= $array_tempo_espera[1]."m ";
-    }
-    if ($array_tempo_espera[2] >= 1) {
-      if($array_tempo_espera[0] == 0)
-        $tempo_espera_display .= $array_tempo_espera[2]."d ";
-    }
-    if ($array_tempo_espera[3] >= 1) {
-      if($array_tempo_espera[1] == 0)
-        $tempo_espera_display .= $array_tempo_espera[3]."h ";
-
-    }
-    if ($array_tempo_espera[4] >= 1) {
-      if($array_tempo_espera[2] == 0)
-        $tempo_espera_display .= $array_tempo_espera[4]."m";
-
-    }
-
-    // Calculo do tempo de espera em horas
-
-
-    if ($array_tempo_espera[0] >= 1) {
-      $tempo_espera += $array_tempo_espera[0] * 12 * 30 * 24; //ano
-    }
-    if ($array_tempo_espera[1] >= 1) {
-      $tempo_espera += $array_tempo_espera[1] * 30 * 24; //mes
-
-    }
-    if ($array_tempo_espera[2] >= 1) {
-      $tempo_espera += $array_tempo_espera[2] * 24;
-    }
-
-    $tempo_espera += $array_tempo_espera[3];
-
-  
-    $tempo_medio = $this->consultas_model->conf()->tempo_medio_atendimento;
-    $tempo_max = $this->consultas_model->conf()->tempo_max_atendimento;
-
-    $aviso_tempo = "";
-    
-
-    if($tempo_espera >= $tempo_medio && $tempo_espera < $tempo_max) {
-
-      $aviso_tempo  = " <span class=\"text-warning\"><i class=\"fas fa-clock\"></i></span>";
-
-    }
-
-    if($tempo_espera > $tempo_max) {
-
-      $aviso_tempo = " <span class=\"text-danger\"><i class=\"fas fa-clock\"></i></span>";
-
-    }
-
-
-		
-		if ($linha->entrega_chamado == 1)
-			$nome_local .= " <span class=\"badge badge-success\" title=\"Entrega\"><i class=\"fas fa-truck\"></i></span>"; //inserindo badge de entrega
+            if ($linha->entrega_chamado == 1)
+                $nome_local .= " <span class=\"badge badge-success\" title=\"Entrega\"><i class=\"fas fa-truck\"></i></span>"; //inserindo badge de entrega
 	
-    if ($this->consultas_model->temEquipEspera($linha->id_chamado) > 0)
-      $nome_local .= " <span class=\"badge badge-warning\" title=\"Espera\"><i class=\"fas fa-hourglass-half\"></i></span>"; //inserindo badge de espera
+            if ($this->consultas_model->temEquipEspera($linha->id_chamado) > 0)
+                $nome_local .= " <span class=\"badge badge-warning\" title=\"Espera\"><i class=\"fas fa-hourglass-half\"></i></span>"; //inserindo badge de espera
 
-    $percent_atend = round((100*$linha->atend_equips) / $linha->total_equips,0);
-    $percent_abert = round((100*($linha->total_equips - $linha->atend_equips) / $linha->total_equips),0);
+            $percent_atend = round((100*$linha->atend_equips) / $linha->total_equips,0);
+            $percent_abert = round((100*($linha->total_equips - $linha->atend_equips) / $linha->total_equips),0);
 
-		$lista_painel['data'][] = array(
-                              0 => $linha->id_chamado,
-                              1 => $linha->prioridade_chamado,
-                              2 => $linha->ticket_chamado,
-                              3 => $linha->nome_solicitante_chamado . $aviso_tempo,
-                              4 => $nome_local,
-                              5 => $linha->data_chamado,
-                              6 => $tempo_espera_oculto,
-                              7 => $tempo_espera_display,
-                              8 => $linha->nome_responsavel,
-                              9 => "<div class=\"progress\">
+            $lista_painel['data'][] = array(
+                0 => $linha->id_chamado,
+                1 => $linha->prioridade_chamado,
+                2 => $linha->ticket_chamado,
+                3 => $linha->nome_solicitante_chamado . $aviso_tempo,
+                4 => $nome_local,
+                5 => $linha->data_chamado,
+                6 => $tempo_espera_oculto,
+                7 => $tempo_espera_display,
+                8 => $linha->nome_responsavel,
+                9 => "<div class=\"progress\">
                                     <div class=\"progress-bar bg-info\" style=\"width: " . $percent_atend . 
-                                    "%;height: 100%\">" .$percent_atend  . "%</div>
+                "%;height: 100%\">" .$percent_atend  . "%</div>
                                     <div class=\"progress-bar\" style=\"width: " 
-                                    . $percent_abert . "%;height: 100%; background: #CDFFFF\"></div>
+                . $percent_abert . "%;height: 100%; background: #CDFFFF\"></div>
                                     </div>",
-                            ); //detalhes
+            ); //detalhes
+        }
 
+        header('Content-Type: application/json');
+        echo json_encode($lista_painel);
     }
-
-    header('Content-Type: application/json');
-
-    echo json_encode($lista_painel);
-
-  }
   
   public function listar_encerrados_painel() {
 

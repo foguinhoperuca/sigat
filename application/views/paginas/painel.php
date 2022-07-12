@@ -89,7 +89,7 @@
 						<thead >
 						<tr>
 							<th>#</th>
-							<th>&nbsp;</th>
+							<th><span class="text-warning"><i class="fas fa-star"></i></span></th>
 							<th>Ticket</th>
 							<th>Solicitante</th>
 							<th>Local</th>
