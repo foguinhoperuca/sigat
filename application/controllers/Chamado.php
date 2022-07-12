@@ -354,53 +354,39 @@ class Chamado extends CI_Controller {
         echo json_encode($lista_painel);
     }
   
-  public function listar_encerrados_painel() {
+    public function listar_encerrados_painel() {
+        $result_banco = $this->consultas_model->listaEncerrados();
+        $lista_painel['data'] = array();
 
-    $result_banco = $this->consultas_model->listaEncerrados();
-    $lista_painel['data'] = array();
+        foreach ($result_banco as $linha) {
+            $lista_painel['data'][] = array(0 => $linha->id_chamado,
+                                            1 => $linha->ticket_chamado,
+                                            2 => $linha->nome_solicitante_chamado,
+                                            3 => $linha->nome_local,
+                                            4 => $linha->data_chamado,
+                                            5 => $linha->data_encerramento,
+                                            6 => $linha->nome_responsavel,
+                                            7 => $linha->nome_fila
+            );
+        }
 
-    foreach ($result_banco as $linha) {
-
-      $lista_painel['data'][] = array(0 => $linha->id_chamado,
-                              1 => $linha->ticket_chamado,
-                              2 => $linha->nome_solicitante_chamado,
-                              3 => $linha->nome_local,
-                              4 => $linha->data_chamado,
-                              5 => $linha->data_encerramento,
-                              6 => $linha->nome_responsavel,
-                              7 => $linha->nome_fila,
-                            );
+        header('Content-Type: application/json');
+        echo json_encode($lista_painel);
     }
 
-    header('Content-Type: application/json');
+    public function priorizar_chamado() {
+        if (isset($_SESSION['id_usuario'])) {
+            $usuario = $this->usuario_model->buscaUsuario($_SESSION['id_usuario']);
+            $id_chamado = $this->input->post("id_chamado");
 
-    echo json_encode($lista_painel);
-
-  }
-  
-
-  public function priorizar_chamado() {
-
-    
-
-    if (isset($_SESSION['id_usuario'])) {
-      $usuario = $this->usuario_model->buscaUsuario($_SESSION['id_usuario']);
-      $id_chamado = $this->input->post("id_chamado");
-
-      if ($usuario->autorizacao_usuario > 3) {
-        $this->chamado_model->priorizaChamado($id_chamado);
-       
-      }
-
-      else {
-        header("HTTP/1.1 406 Not Acceptable");
-      }
+            if ($usuario->autorizacao_usuario > 3) {
+                $this->chamado_model->priorizaChamado($id_chamado);
+            } else {
+                header("HTTP/1.1 406 Not Acceptable");
+            }
+        } else {
+            header("HTTP/1.1 403 Forbidden");
+        }
     }
-    else {
-      header("HTTP/1.1 403 Forbidden");
-    }
-    
-  }
 }
-
 ?>

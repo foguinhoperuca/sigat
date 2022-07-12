@@ -141,20 +141,26 @@ class Consultas_model extends CI_Model {
 
         return $dados;
     }
-    
-    
-	
-	
-    public function listaEncerrados() {
 
-        $q = "SELECT id_chamado,ticket_chamado, nome_solicitante_chamado, 
-        (SELECT nome_local FROM local WHERE id_local = id_local_chamado) AS nome_local, 
-        DATE_FORMAT(data_chamado, \"%d/%m/%Y - %H:%i:%s\") AS data_chamado,
-        DATE_FORMAT(data_encerramento_chamado, \"%d/%m/%Y - %H:%i:%s\") as data_encerramento,
-        (SELECT usuario.nome_usuario FROM usuario WHERE usuario.id_usuario = chamado.id_usuario_responsavel_chamado) AS nome_responsavel, 
-        (SELECT nome_fila FROM fila WHERE id_fila = chamado.id_fila_chamado) AS nome_fila 
-        FROM chamado
-        WHERE status_chamado = 'ENCERRADO'";
+    public function listaEncerrados() {
+        $q = <<<SQL
+           SELECT
+             c.id_chamado,
+             c.ticket_chamado,
+             c.nome_solicitante_chamado,
+             DATE_FORMAT(c.data_chamado, "%d/%m/%Y - %H:%i:%s") AS "data_chamado",
+             DATE_FORMAT(c.data_encerramento_chamado, "%d/%m/%Y - %H:%i:%s") AS "data_encerramento",
+             l.name AS "nome_local",
+             u.nome_usuario AS "nome_responsavel",
+             f.nome_fila AS "nome_fila"
+           FROM chamado AS c
+           LEFT JOIN otrs_locations AS l ON c.pms_id = l.PMSID
+           LEFT JOIN usuario AS u ON c.id_usuario_responsavel_chamado = u.id_usuario
+           LEFT JOIN fila AS f ON c.id_fila_chamado = f.id_fila
+           WHERE
+             c.status_chamado = 'ENCERRADO'
+           ;
+           SQL;
 
         return $this->db->query($q)->result();
     }
