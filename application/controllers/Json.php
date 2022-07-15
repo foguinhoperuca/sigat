@@ -314,47 +314,59 @@ class Json extends CI_Controller {
         }
     }
 
-    
-
     public function chamado() {
-
         if (isset($_SESSION['id_usuario'])) {
-            
             $id_chamado = $this->input->get('id_chamado');
 
-   
-            $q_buscaChamado = "select complemento_chamado, resumo_chamado, ticket_chamado, id_chamado, id_fila, status_chamado, nome_solicitante_chamado, nome_local, DATE_FORMAT(data_chamado, '%d/%m/%Y - %H:%i:%s') as data_chamado, telefone_chamado,
-                (select usuario.nome_usuario from usuario where usuario.id_usuario = chamado.id_usuario_responsavel_chamado) as nome_responsavel,
-                (select usuario.id_usuario from usuario where usuario.id_usuario = chamado.id_usuario_responsavel_chamado) as id_responsavel,  
-                (select fila.nome_fila from fila where fila.id_fila = chamado.id_fila_chamado) as nome_fila_chamado, entrega_chamado
-                from local, fila, chamado
-                where local.id_local = chamado.id_local_chamado and
-                fila.id_fila = chamado.id_fila_chamado and
-                chamado.id_chamado = " . $id_chamado;
-
-           $q_buscaStatusEquipamentos = "select status_equipamento_chamado from equipamento_chamado where equipamento_chamado.id_chamado_equipamento = " . $id_chamado;
-
+            // TODO SHOW local from otrs_locations
+            $q_buscaChamado = <<<SQL
+                            SELECT
+                              c.id_chamado,
+                              f.id_fila,
+                              c.ticket_chamado,
+                              c.nome_solicitante_chamado,
+                              c.telefone_chamado,
+                              DATE_FORMAT(c.data_chamado, '%d/%m/%Y - %H:%i:%s') AS data_chamado,
+                              c.complemento_chamado, -- SOMENTE NESTA QUERY (id_ticket_chamado)
+                              c.resumo_chamado, -- SOMENTE NESTA QUERY
+                              c.status_chamado, -- SOMENTE NESTA QUERY
+                              c.entrega_chamado, -- SOMENTE NESTA QUERY
+                              -- CONCAT('XXX ::', nome_local, ' :: XXX') AS "nome_local",
+                              l.name AS "nome_local",
+                              f.nome_fila AS "nome_fila_chamado",
+                              u.id_usuario AS "id_responsavel",
+                              u.nome_usuario AS "nome_responsavel"
+                            FROM chamado AS c
+                            LEFT JOIN otrs_locations AS l ON c.pms_id = l.PMSID
+                            LEFT JOIN fila AS f ON c.id_fila_chamado = f.id_fila
+                            LEFT JOIN usuario AS u ON c.id_usuario_responsavel_chamado = u.id_usuario
+                            WHERE
+                              c.id_chamado = {$id_chamado}
+                            ;
+            SQL;
+            $q_buscaStatusEquipamentos = <<<SQL
+                                       SELECT
+                                         -- CONCAT('SSS :: ', status_equipamento_chamado, ' :: SSS') AS "status_equipamento_chamado"
+                                         status_equipamento_chamado
+                                       FROM equipamento_chamado
+                                       WHERE
+                                         equipamento_chamado.id_chamado_equipamento = {$id_chamado}
+                                       ;
+            SQL;
 
             $result = $this->db->query($q_buscaChamado)->row_array();
+            $result['status_equipamentos'] = $this->db->query($q_buscaStatusEquipamentos)->result_array();
 
             $result['nome_solicitante_chamado'] = str_replace(array('"', "'"), '', $result['nome_solicitante_chamado']);
-            
             //$result['descricao_chamado'] = strip_tags($result['descricao_chamado'],$this->tags_permitidas);
 
-            
-            $result['status_equipamentos'] = $this->db->query($q_buscaStatusEquipamentos)->result_array();
-            
-
             header("Content-Type: application/json");
-                
             echo json_encode($result);
-        }
-
-        else {
+        } else {
             header('HTTP/1.0 403 Forbidden');
         }
     }
-	
+
 	public function triagem() {
 
         if (isset($_SESSION['id_usuario'])) {
@@ -471,38 +483,38 @@ class Json extends CI_Controller {
     }
 
     public function locais() {
-
         if (isset($_SESSION['id_usuario'])) {
-
             $termo = $this->input->get('q');
             $lista_nomes = array();
             $nova_lista = array();
 
-
             try {
-                $busca = $this->db->query("SELECT nome_local FROM local WHERE nome_local LIKE '%". $termo . "%' order by id_local");
-                
+                // $qry = "SELECT nome_local FROM local WHERE nome_local LIKE '%". $termo . "%' ORDER BY id_local";
+                $qry = <<<SQL
+                    SELECT
+                      name AS "nome_local"
+                    FROM otrs_locations
+                    WHERE
+                      name LIKE '%{$termo}%'
+                    ORDER BY
+                      id
+                    ;
+                SQL;
+                $busca = $this->db->query($qry);
                 $result = $busca->result_array();
                 
-                if ( count($result) ) { 
+                if (count($result)) { 
                     foreach($result as $row) {
                         array_push($lista_nomes, $row['nome_local']);
-                        
-                    }   
-                    
-                
-                foreach ($lista_nomes as $nome) {
-                    
-                    $novo_nome = htmlentities($nome); //trocando " por &quot; para evitar problemas com o autocomplete
-                    
-                    array_push($nova_lista, $novo_nome);
+                    }
+
+                    foreach ($lista_nomes as $nome) {
+                        $novo_nome = htmlentities($nome); //trocando " por &quot; para evitar problemas com o autocomplete
+                        array_push($nova_lista, $novo_nome);
                     }
 
                     header("Content-Type: application/json");
-                    
                     echo json_encode($nova_lista);
-                    
-
                 } else {
                     echo "Nenhum resultado retornado.";
                 }
@@ -512,8 +524,6 @@ class Json extends CI_Controller {
         } else {
             header('HTTP/1.0 403 Forbidden');
         }
-
-
     }
 
     public function desc_equipamento($e_desc,$json = TRUE) {
