@@ -491,15 +491,15 @@ class Json extends CI_Controller {
             try {
                 // $qry = "SELECT nome_local FROM local WHERE nome_local LIKE '%". $termo . "%' ORDER BY id_local";
                 $qry = <<<SQL
-                    SELECT
-                      name AS "nome_local"
-                    FROM otrs_locations
-                    WHERE
-                      name LIKE '%{$termo}%'
-                    ORDER BY
-                      id
-                    ;
-                SQL;
+                  SELECT
+                    name AS "nome_local"
+                  FROM otrs_locations
+                  WHERE
+                    name LIKE '%{$termo}%'
+                  ORDER BY
+                    id
+                  ;
+                  SQL;
                 $busca = $this->db->query($qry);
                 $result = $busca->result_array();
                 

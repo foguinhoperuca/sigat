@@ -17,48 +17,68 @@ class Chamado_model extends CI_Model {
 
             $inst->db->trans_start();
             $inst->db->query($sql_insert); //registrando o chamado
-            $query = $inst->db->query('SELECT id_chamado from chamado order by data_chamado desc LIMIT 1');
+            $query = $inst->db->query('SELECT id_chamado FROM chamado ORDER BY data_chamado DESC LIMIT 1');
             $linha = $query->row_array();
             $id_novo_chamado = $linha['id_chamado'];
             $inst->db->trans_complete();
             //$id_novo_chamado = $inst->db->insert_id(); // buscando o ID do chamado recem aberto
 
-            $inst->db->query("insert into alteracao_chamado values(NULL," . $id_novo_chamado  . "," . //criando historico de alteracao
+            $inst->db->query("INSERT INTO alteracao_chamado VALUES (NULL, " . $id_novo_chamado  . "," . //criando historico de alteracao
                              $p_id_usuario .", ' abriu o chamado na fila <b>" . 
                              $p_nome_fila . "</b>', NOW())");
 
             return $id_novo_chamado;
         }
 
-        $q_buscaIdLocal = "SELECT id_local, pms_id FROM local WHERE nome_local = '". addslashes($dados['nome_local']) . "'";
+        $q_buscaIdLocal = "SELECT l.PMSID FROM otrs_locations AS l WHERE l.name = '" . addslashes($dados['nome_local']) . "'";
         $r_id_local = $this->db->query($q_buscaIdLocal);
 
-        if ($r_id_local->num_rows() > 0) { // validando local
-            $id_local = $r_id_local->row()->id_local;
-            $pms_id = $r_id_local->row()->pms_id;
-            $complementoM = mb_strtoupper($dados['comp_local'],'UTF-8');
-            $resumoM = mb_strtoupper($dados['resumo_solicitacao'],'UTF-8');
+        /*
+         * validando local
+         */
+        if ($r_id_local->num_rows() > 0) {
+            $pms_id = $r_id_local->row()->PMSID;
+            $complementoM = mb_strtoupper($dados['comp_local'], 'UTF-8');
+            $resumoM = mb_strtoupper($dados['resumo_solicitacao'], 'UTF-8');
 
             //$id_ticket_otrs = $this->db->query("select id_ticket_triagem from triagem where id_triagem = " .$dados['id_triagem'])->row()->id_ticket_triagem;
 
-            $q_insereChamado = 
-                             "INSERT INTO `db_sigat`.`chamado` (`id_local_chamado`, `nome_solicitante_chamado`, `telefone_chamado`, 
-                `id_usuario_abertura_chamado`, `status_chamado`, `id_fila_chamado`, `data_chamado`, `ticket_chamado`, 
-                `id_ticket_chamado`,`complemento_chamado`, `resumo_chamado`, `data_encerramento_chamado`, `pms_id`) values(" . 
-                             $id_local . ",'" .
-                             $dados['nome_solicitante'] . "','" .
-                             $dados['telefone'] . "'," .
-                             $dados['id_usuario'] . ", 'ABERTO', 1, NOW(),'" .
-                             $dados['num_ticket'] . "'," .
-                             $dados['id_ticket'] . ",'" .
-                             $complementoM . "','" .
-                             $resumoM . "', NULL, " .
-                             $pms_id . ")"
-                             ;
+            $q_insereChamado = <<<SQL
+                                 INSERT INTO db_sigat.chamado (
+                                       nome_solicitante_chamado,
+                                       telefone_chamado,
+                                       id_usuario_abertura_chamado,
+                                       status_chamado,
+                                       id_fila_chamado,
+                                       data_chamado,
+                                       ticket_chamado,
+                                       id_ticket_chamado,
+                                       complemento_chamado,
+                                       resumo_chamado,
+                                       data_encerramento_chamado,
+                                       pms_id
+                                 )
+                                 VALUES (
+                                       '{$dados['nome_solicitante']}',
+                                       '{$dados['telefone']}',
+                                       {$dados['id_usuario']},
+                                       'ABERTO',
+                                       1,
+                                       NOW(),
+                                       '{$dados['num_ticket']}',
+                                       '{$dados['id_ticket']}',
+                                       '{$complementoM}',
+                                       '{$resumoM}',
+                                       NULL,
+                                       '{$pms_id}'
+                                 )
+                                 ;
+                               SQL;
 
             // TODO resumo & complemento will be used as autocomplete in near future. Maybe a SQL View would do the job?
             if (strlen($resumoM) > 6)
                 $this->db->query("INSERT resumo VALUES (NULL, '" . $resumoM . "')"); // cadastrando resumos
+
             if (strlen($complementoM) > 6)
                 $this->db->query("INSERT complemento VALUES (NULL, '" . $complementoM . "')"); // cadastrando complementos
 
@@ -67,28 +87,28 @@ class Chamado_model extends CI_Model {
                 $novo_id = importar($this_model, $q_insereChamado, $nome_fila, $dados['id_usuario']);
 
                 if($novo_id !== FALSE) {
-
-                    // ------------ LOG -------------------
+                    /*
+                     * ------------ LOG -------------------
+                     */
                     $log = array(
                         'acao_evento' => 'INSERIR_CHAMADO',
                         'desc_evento' => 'ID CHAMADO: ' . $novo_id ,
                         'id_usuario_evento' => $_SESSION['id_usuario']
                     );
                     $this->db->insert('evento', $log);
-                    // -------------- /LOG ----------------
-                    
+
                     foreach($dados['listaEquipamentos'] as $equip) { //registrando nas tabelas equipamento_chamado e, se necessario, na tabela equipamento
-                        $busca_equip = $this->db->query("select * from equipamento where num_equipamento = '". $equip->Número ."'");
+                        $busca_equip = $this->db->query("SELECT * FROM equipamento WHERE num_equipamento = '". $equip->Número ."'");
                         if ($busca_equip->num_rows() == 0) { //equipamento novo
-                            $this->db->query("insert into equipamento values('". $equip->Número ."','". $equip->Descrição . "',NOW(),NULL,NULL)");
+                            $this->db->query("INSERT INTO equipamento VALUES ('". $equip->Número ."','". $equip->Descrição . "', NOW(), NULL, NULL)");
                         }
-                        $this->db->query("insert into equipamento_chamado values('" . $equip->Número."','ABERTO', NULL, NOW(),". $novo_id .")");
+                        $this->db->query("INSERT INTO equipamento_chamado VALUES ('" . $equip->Número . "', 'ABERTO', NULL, NOW(), ". $novo_id .")");
                     }
 
                     // TODO usar anexos OTRS somente
                     // FIXME como eh feita de => para do anexo_otrs para que ele seja reconhecido no SIGAT
                     foreach($dados['anexos'] as $anexo) {
-                        $this->db->query("insert into anexos_otrs(id_chamado_sigat,id_anexo_otrs) values(".$novo_id.",". $anexo->id_arquivo.")");
+                        $this->db->query("INSERT INTO anexos_otrs(id_chamado_sigat, id_anexo_otrs) VALUES (" . $novo_id . ", " . $anexo->id_arquivo . ")");
                     }
 
                     // FIXME not used anymore. Still need be here!?
@@ -105,7 +125,7 @@ class Chamado_model extends CI_Model {
                     return array("novo_id" => $novo_id, "msg" => $msg);
                 } else {
                     die($novo_id);
-                }                        
+                }
             }
         } else {
             $msg .= "<div id=\"alerta\" class=\"alert alert-warning alert-dismissible\">" .
@@ -121,12 +141,24 @@ class Chamado_model extends CI_Model {
         $msg = NULL;
         $texto_alteracao = NULL;
 
-        $q_buscaIdLocal = "SELECT id_local, pms_id FROM local WHERE nome_local = '". addslashes($dados['nome_local']) . "'";
-        $r_id_local = $this->db->query($q_buscaIdLocal);
+        $search_name = addslashes($dados['nome_local']);
+        $q_buscaLocal = <<<SQL
+                        SELECT
+                          PMSID,
+                          name
+                        FROM otrs_locations AS l
+                        WHERE
+                          l.name = '{$search_name}'
+                        ;
+                        SQL;
+        $r_local = $this->db->query($q_buscaLocal);
 
-        if ($r_id_local->num_rows() > 0) { // validando local
-            $id_local = $r_id_local->row()->id_local;
-            $pms_id = $r_id_local->row()->pms_id;
+        /*
+         * validando o local
+         */
+        if ($r_local->num_rows() > 0) {
+            $pms_id = $r_local->row()->PMSID;
+            $location_name = $r_local->row()->name;
         } else {
             $msg .= "<div id=\"alerta\" class=\"alert alert-warning alert-dismissible\">" .
                 "<a href=\"#\" class=\"close\" data-dismiss=\"alert\" aria-label=\"close\">&times;</a>" .
@@ -135,42 +167,63 @@ class Chamado_model extends CI_Model {
 
             exit($msg);
         }
-        
+
         /*
          * ------ checando alteracoes no chamado ---------
          */
 
-        $chamado_original = $this->db->query('SELECT id_usuario_responsavel_chamado, 
-        (SELECT nome_usuario FROM usuario WHERE id_usuario = id_usuario_responsavel_chamado) AS nome_responsavel, 
-        nome_solicitante_chamado, telefone_chamado, 
-        id_local_chamado, (SELECT nome_local FROM local WHERE id_local = id_local_chamado) AS nome_local FROM chamado
-        WHERE id_chamado = ' . $dados['id_chamado'])->row();
+        $orig_qry = <<<SQL
+                  SELECT
+                    id_usuario_responsavel_chamado,
+                    nome_solicitante_chamado,
+                    telefone_chamado,
+                    pms_id,
+                    u.nome_usuario AS "nome_responsavel",
+                    l.name AS "nome_local"
+                  FROM chamado AS c
+                  LEFT JOIN usuario AS u ON c.id_usuario_responsavel_chamado = u.id_usuario
+                  LEFT JOIN otrs_locations AS l ON c.pms_id = l.PMSID
+                  WHERE
+                    c.id_chamado = {$dados['id_chamado']}
+                  ;
+                  SQL;
+        $chamado_original = $this->db->query($orig_qry)->row();
 
-        if ($dados['id_responsavel'] != NULL) { //se foi enviado algum id_responsavel...
-            $q_alteraChamado = 
-            "UPDATE chamado SET nome_solicitante_chamado = '" . $dados['nome_solicitante'] . 
-            "', telefone_chamado = " . $dados['telefone'] . ", id_local_chamado = " . $id_local . ", pms_id = " . $pms_id . ", id_usuario_responsavel_chamado = "
-            . $dados['id_responsavel'] . " WHERE id_chamado = " . $dados['id_chamado'];
-        } else { //se nao...
-            $q_alteraChamado = 
-            "UPDATE chamado SET nome_solicitante_chamado = '" . $dados['nome_solicitante'] . 
-            "', telefone_chamado = " . $dados['telefone'] . ", id_local_chamado = " . $id_local . ", pms_id = " . $pms_id . 
-            " WHERE id_chamado = " . $dados['id_chamado'];
+        if ($dados['id_responsavel'] != NULL) { // se foi enviado algum id_responsavel...
+            $q_alteraChamado = <<<SQL
+                             UPDATE chamado SET
+                               pms_id = {$pms_id},
+                               telefone_chamado = '{$dados["telefone"]}',
+                               nome_solicitante_chamado = '{$dados["nome_solicitante"]}',
+                               id_usuario_responsavel_chamado = {$dados['id_responsavel']}
+                             WHERE
+                               id_chamado = {$dados['id_chamado']}
+                             SQL;
+        } else { // se nao...
+            $q_alteraChamado = <<<SQL
+                             UPDATE chamado SET
+                               pms_id = {$pms_id},
+                               telefone_chamado = '{$dados["telefone"]}',
+                               nome_solicitante_chamado = '{$dados["nome_solicitante"]}'
+                             WHERE
+                               id_chamado = {$dados['id_chamado']}
+                             SQL;
         }
 
         // // FIXME execute it twice?! See #L200
         // $this->db->query($q_alteraChamado); //executa a alteracao
 
-        //removido inserção de interacao
+        /*
+         * removido inserção de interacao
+         */
 
         // TODO alteracao_chamado ficaria mais eficiente sendo logado diretamente no banco e preferencialmente em uma tabela soh (eventos) aos inves de duas (alteracao_chamado e eventos)
         //inserindo na tabela alteracao
-        if ($chamado_original->id_local_chamado != $id_local) {
-            // FIXME otrs_location has impact here!
-            $novo_nome_local = $this->db->query('SELECT nome_local FROM local WHERE id_local = ' . $id_local)->row()->nome_local;
+        if ($chamado_original->pms_id != $pms_id) {
+            // $new_local_name = $this->db->query('SELECT l.name FROM otrs_location AS l WHERE l.PMSID = ' . $pms_id)->row()->name;
 
             $texto_alteracao .= 'alterou o local de <strong>' . $chamado_original->nome_local . '</strong>';
-            $texto_alteracao .= ' para <strong>' . $novo_nome_local . '</strong></p>';
+            $texto_alteracao .= ' para <strong>' . $location_name . '</strong></p>';
         }
 
         if ($chamado_original->telefone_chamado != $dados['telefone']) {
@@ -301,33 +354,55 @@ class Chamado_model extends CI_Model {
         return $result->row()->ticket_triagem;
     }
 
+
     public function buscaChamado($id_chamado, $status = '') {
+        // FIXME esta query não é exibida ?! Talvez na geração de termos
+        $q_buscaChamado = <<<SQL
+                        SELECT
+                          c.id_ticket_chamado,
+                          c.id_chamado,
+                          f.id_fila,
+                          c.ticket_chamado,
+                          c.nome_solicitante_chamado,
+                          c.telefone_chamado,
+                          c.prioridade_chamado,
+                          -- CONCAT('--- ', l.name, '+++') AS "nome_local",
+                          l.name AS "nome_local",
+                          DATE_FORMAT(c.data_chamado, '%d/%m/%Y - %H:%i:%s') AS data_chamado,
+                          u.id_usuario AS "id_responsavel",
+                          f.nome_fila AS "nome_fila_chamado"
+                        FROM chamado AS c
+                        LEFT JOIN otrs_locations AS l ON c.pms_id = l.PMSID
+                        LEFT JOIN fila AS f ON c.id_fila_chamado = f.id_fila
+                        LEFT JOIN usuario AS u ON c.id_usuario_responsavel_chamado = u.id_usuario
+                        WHERE
+                          c.id_chamado = {$id_chamado}
+                        ;
+        SQL;
+        $result['chamado'] = $this->db->query($q_buscaChamado)->row();
 
-	   $q_buscaChamado = "select id_ticket_chamado, ticket_chamado, id_chamado, id_fila, nome_solicitante_chamado, nome_local, DATE_FORMAT(data_chamado, '%d/%m/%Y - %H:%i:%s') as data_chamado, telefone_chamado,
-        (select usuario.id_usuario from usuario where usuario.id_usuario = chamado.id_usuario_responsavel_chamado) as id_responsavel, 
-        (select fila.nome_fila from fila where fila.id_fila = chamado.id_fila_chamado) as nome_fila_chamado, prioridade_chamado
-        from local, fila, chamado
-        where local.id_local = chamado.id_local_chamado and
-        fila.id_fila = chamado.id_fila_chamado and
-        chamado.id_chamado = " . $id_chamado;
-
-        $q_buscaEquipamentos = "SELECT e.num_equipamento, e.descricao_equipamento
-        FROM equipamento AS e, equipamento_chamado
-        WHERE equipamento_chamado.id_chamado_equipamento = " . $id_chamado . 
-        " AND status_equipamento_chamado = '" .$status .
-        "' AND equipamento_chamado.num_equipamento_chamado = e.num_equipamento";
-        
+        // FIXME esta query não é exibida?
+        $q_buscaEquipamentos = <<<SQL
+            SELECT
+              -- CONCAT(' ==> ', e.num_equipamento, ' <--'),
+              -- CONCAT('+++ ', e.descricao_equipamento, ' +++')
+              e.num_equipamento,
+              e.descricao_equipamento
+            FROM equipamento AS e, equipamento_chamado
+            WHERE
+              equipamento_chamado.id_chamado_equipamento = {$id_chamado}
+              AND status_equipamento_chamado = '{$status}'
+              AND equipamento_chamado.num_equipamento_chamado = e.num_equipamento
+            ;
+        SQL;
         $result['equipamentos'] = $this->db->query($q_buscaEquipamentos)->result();
 
-        $result['chamado'] = $this->db->query($q_buscaChamado)->row();
-        
         if (isset($result['chamado'])) {
             $result['icone'] = $this->db->query(
                 "SELECT icone_fila from fila f 
                 INNER JOIN chamado c ON(f.id_fila = c.id_fila_chamado) 
                 WHERE id_chamado = ". $id_chamado)->row()->icone_fila;
         }
-        
 
         return $result;
     }

@@ -80,7 +80,7 @@ class Chamado extends CI_Controller {
       $dados['id_usuario']         = $_SESSION["id_usuario"];
 
       $nome_usuario = $this->usuario_model->buscaUsuario($_SESSION["id_usuario"])->nome_usuario;
-  
+
       $novo_chamado = $this->chamado_model->importaChamado($dados);
       echo $novo_chamado["msg"];
 
@@ -113,6 +113,8 @@ class Chamado extends CI_Controller {
           curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
           curl_exec($curl);
           curl_close($curl);
+      } else {
+          echo "<br /><div class=\"alert alert-warning\">Integra&ccedil;&atilde;o com OTRS desativada. Habilite a variável <strong>SEND_DATA_OTRS</strong> para <strong>True</strong> e as informações do SIGAT serão devolvidas ao OTRS.</div>";
       }
   }
 

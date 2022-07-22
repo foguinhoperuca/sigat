@@ -1041,23 +1041,31 @@ class Interacao_model extends CI_Model {
       // -------------- /LOG ----------------
 
    }
-    
-   
-   public function buscaInteracaoChamado($id_interacao) {
 
-      $query = $this->db->query("SELECT DATE_FORMAT(data_interacao, '%d/%m/%Y - %H:%i:%s') AS data_interacao, 
-      id_interacao, texto_interacao, nome_usuario, id_chamado_interacao, pool_equipamentos, ticket_chamado, 
-      data_chamado, nome_local, nome_solicitante_chamado
-      FROM interacao i
-      INNER JOIN usuario u ON(u.id_usuario = i.id_usuario_interacao)
-      INNER JOIN chamado c ON(i.id_chamado_interacao = c.id_chamado)
-      INNER JOIN local l ON(c.id_local_chamado = l.id_local)
-      WHERE i.id_interacao = " . $id_interacao);
-      
-      $result = $query->row();
+    public function buscaInteracaoChamado($id_interacao) {
+        $qry = <<<SQL
+            SELECT
+              DATE_FORMAT(data_interacao, '%d/%m/%Y - %H:%i:%s') AS "data_interacao",
+              id_interacao,
+              texto_interacao,
+              nome_usuario,
+              id_chamado_interacao,
+              pool_equipamentos,
+              ticket_chamado,
+              data_chamado,
+              nome_local,
+              nome_solicitante_chamado
+            FROM interacao As i
+            INNER JOIN usuario AS u ON i.id_usuario_interacao = u.id_usuario
+            INNER JOIN chamado AS c ON i.id_chamado_interacao = c.id_chamado
+            INNER JOIN local AS l ON c.id_local_chamado = l.id_local
+            WHERE
+              i.id_interacao = {$id_interacao}
+            ;
+        SQL;
 
-      return $result;
-   }
+        return $this->db->query($qry)->row();
+    }
 
    public function buscaInteracao($id_interacao) {
 

@@ -24,9 +24,7 @@ class Usuario_model extends CI_Model {
     }
 
     public function buscaUsuario($id_usuario)  {
-
-        return $this->db->query('select *, DATE_FORMAT(data_usuario, "%d/%m/%Y") as data_usuario from usuario where id_usuario = ' . $id_usuario)->row();
-      
+        return $this->db->query("SELECT *, DATE_FORMAT(data_usuario, '%d/%m/%Y') AS data_usuario FROM usuario WHERE id_usuario = " . $id_usuario)->row();
     }
 
     public function buscaUsuarios()  {

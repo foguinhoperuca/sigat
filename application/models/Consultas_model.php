@@ -26,8 +26,7 @@ class Consultas_model extends CI_Model {
         }
 
         // var_dump($final_segment . " LALALA " );
-        
-        // TODO rewrite it!
+
         $q = <<<SQL
            SELECT
              id_chamado,
@@ -36,54 +35,36 @@ class Consultas_model extends CI_Model {
              nome_solicitante_chamado,
              data_chamado,
              -- data_chamado, -- 2x ?? (repete!!)
-             prioridade_chamado,
              -- status_chamado, -- sem uso !?
+             prioridade_chamado,
              entrega_chamado,
-             -- TODO use otrs instead local
-             -- (
-             --     SELECT
-             --       nome_local
-             --     FROM local
-             --     WHERE
-             --       id_local = id_local_chamado
-             -- ) AS nome_local,
+             l.name AS "nome_local",
+             u.nome_usuario AS "nome_responsavel",
              (
                  SELECT
-                   l.name AS "nome_local"
-                 FROM otrs_locations AS l
+                   i.data_interacao
+                 FROM interacao AS i
                  WHERE
-                   pms_id = l.PMSID
-             ) AS nome_local,
-             (
-                 SELECT
-                   usuario.nome_usuario
-                 FROM usuario
-                 WHERE
-                   usuario.id_usuario = c.id_usuario_responsavel_chamado
-             ) AS nome_responsavel, 
-             (
-                 SELECT
-                   COUNT(*)
-                 FROM equipamento_chamado
-                 WHERE id_chamado_equipamento = c.id_chamado
-             ) AS total_equips,
-             (
-                 SELECT
-                   COUNT(*)
-                 FROM equipamento_chamado
-                 WHERE id_chamado_equipamento = c.id_chamado AND status_equipamento_chamado IN ('ATENDIDO', 'ENTREGUE', 'INSERVIVEL')
-             ) AS atend_equips,
-             (
-                 SELECT
-                   data_interacao
-                 FROM interacao
-                 WHERE
-                   id_chamado_interacao = c.id_chamado
+                   i.id_chamado_interacao = c.id_chamado
                  ORDER BY
-                   data_interacao DESC
+                   i.data_interacao DESC
                  LIMIT 1
-             ) AS data_ultima_interacao
-           FROM chamado c
+             ) AS "data_ultima_interacao",
+             (
+                 SELECT
+                   COUNT(*)
+                 FROM equipamento_chamado AS e
+                 WHERE e.id_chamado_equipamento = c.id_chamado
+             ) AS "total_equips",
+             (
+                 SELECT
+                   COUNT(*)
+                 FROM equipamento_chamado AS ec
+                 WHERE ec.id_chamado_equipamento = c.id_chamado AND status_equipamento_chamado IN ('ATENDIDO', 'ENTREGUE', 'INSERVIVEL')
+             ) AS "atend_equips"
+           FROM chamado AS c
+           LEFT JOIN otrs_locations AS l ON c.pms_id = l.PMSID
+           LEFT JOIN usuario AS u ON u.id_usuario = c.id_usuario_responsavel_chamado
            WHERE
              status_chamado <> 'ENCERRADO'
              AND {$final_segment}
@@ -185,13 +166,13 @@ class Consultas_model extends CI_Model {
     
     
 
+    // FIXME unused!?
     public function listaLocais() {
-        
         $this->db->select();
-        $this->db->from('local');
-        $this->db->order_by('nome_local');
+        $this->db->from('otrs_locations');
+        $this->db->order_by('name');
+
         return $this->db->get()->result_array();
-        
     }
 
     public function buscaGrupo($auto) {
